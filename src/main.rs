@@ -15,19 +15,19 @@ fn book(file_path: &Path) {
     println!("With text:\n{contents}");
 }
 
-fn rust_by_exemple(file_path: &Path) {
+fn rust_by_exemple(file_path: &Path) -> Vec<u8> {
     // Create a path to the desired file
     let display = file_path.display();
 
     // Open the path in read-only mode, returns `io::Result<File>`
     let mut file = match File::open(&file_path) {
-        Err(why) => panic!("couldn't open {}: {}", display, why),
+        Err(why) => panic!("Couldn't open {}: {}", display, why),
         Ok(file) => file,
     };
 
     let mut buffer = Vec::new();
     match file.read_to_end(&mut buffer) {
-        Err(why) => panic!("couldn't read {}: {}", display, why),
+        Err(why) => panic!("Couldn't read {}: {}", display, why),
         Ok(size) => print!("{} contains: {} bytes\n", display, size),
     }
 
@@ -39,12 +39,13 @@ fn rust_by_exemple(file_path: &Path) {
     // }
 
     // `file` goes out of scope, and the "hello.txt" file gets closed
+    buffer
 }
 
 fn main() {
     let swimming_path = Path::new("resources/swimming.fit");
 
-    rust_by_exemple(swimming_path);
+    let content = rust_by_exemple(swimming_path);
     // let display = swimming_path.display();
 
     // let mut file = match File::open(&swimming_path) {
