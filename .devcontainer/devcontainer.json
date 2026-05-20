@@ -7,13 +7,17 @@
     "customizations": {
         "vscode": {
             "extensions": [
-                "eamodio.gitlens"
+                "eamodio.gitlens",
+                "github.copilot"
             ],
             "settings": {
-                "git.autofetch": true
+                "editor.formatOnSave": true,
+                "editor.formatOnType": true,
+                "git.autofetch": true,
+                "github.copilot.nextEditSuggestions.enabled": true
             }
         }
-    }
+    },
     // Use 'mounts' to make the cargo cache persistent in a Docker Volume.
     // "mounts": [
     // 	{

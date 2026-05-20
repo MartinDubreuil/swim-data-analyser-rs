@@ -1,125 +1,256 @@
 use std::fs;
-use std::fs::File;
-use std::fs::read_to_string;
-use std::io::prelude::*;
+use std::io;
 use std::path::Path;
 
-use std::io::{self, BufRead};
+mod error;
+use error::Error;
+use error::Result;
 
-// use std::env;
+#[derive(Debug, Default)]
+struct FitHeader {
+    protocol_version: u8,
+    profile_version: u16,
+    data_records_size: u32,
+    data_type: String,
+}
 
-// https://doc.rust-lang.org/rust-by-example/std_misc/file/read_lines.html#a-naive-approach
-fn read_lines_naive(filename: &str) -> Vec<String> {
-    let mut result = Vec::new();
+impl FitHeader {
+    pub fn parse(&mut self, content: &[u8]) -> Result<()> {
+        let header = Self::validate(content)?;
 
-    for line in read_to_string(filename).unwrap().lines() {
-        result.push(line.to_string())
+        self.protocol_version = header[1];
+        self.profile_version = u16::from_le_bytes(header[2..4].try_into()?);
+        self.data_records_size = u32::from_le_bytes(header[4..8].try_into()?);
+        self.data_type = str::from_utf8(&header[8..12])?.to_owned();
+
+        Ok(())
     }
 
-    result
-}
+    fn validate(content: &[u8]) -> Result<&[u8]> {
+        let header_size = *content
+            .first()
+            .ok_or(io::Error::from(io::ErrorKind::UnexpectedEof))?;
 
-// https://doc.rust-lang.org/rust-by-example/std_misc/file/read_lines.html#a-naive-approach
-fn read_lines_naive_concise(filename: &str) -> Vec<String> {
-    read_to_string(filename)
-        .unwrap() // panic on possible file-reading errors
-        .lines() // split the string into an iterator of string slices
-        .map(String::from) // make each slice into a string
-        .collect() // gather them together into a vector
-}
+        if header_size < 14 {
+            return Err(Error::InvaliHeaderSize {
+                received: header_size,
+            }
+            .into());
+        }
 
-// https://doc.rust-lang.org/rust-by-example/std_misc/file/read_lines.html#a-more-efficient-approach
+        let header = content
+            .get(..header_size as usize)
+            .ok_or(io::Error::from(io::ErrorKind::UnexpectedEof))?;
 
-// The output is wrapped in a Result to allow matching on errors.
-// Returns an Iterator to the Reader of the lines of the file.
-fn read_lines_efficient<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
-where
-    P: AsRef<Path>,
-{
-    let file = File::open(filename)?;
-    Ok(io::BufReader::new(file).lines())
-}
+        Self::checksum(header)?;
 
-// https://doc.rust-lang.org/book/ch12-02-reading-a-file.html#reading-a-file
-fn book(file_path: &Path) {
-    // --snip--
-    let display = file_path.display();
-    println!("In file {display}");
+        if &header[8..12] != b".FIT" {
+            return Err(Error::MagicNumber {
+                received: str::from_utf8(&header[8..12])?.to_string(),
+            }
+            .into());
+        }
 
-    let contents = read_to_string(file_path).expect("Should have been able to read the file");
-
-    println!("With text:\n{contents}");
-}
-
-// https://doc.rust-lang.org/rust-by-example/std_misc/file/open.html#open
-fn rust_by_exemple(file_path: &Path) -> Vec<u8> {
-    // Create a path to the desired file
-    let display = file_path.display();
-
-    // Open the path in read-only mode, returns `io::Result<File>`
-    let mut file = match File::open(&file_path) {
-        Err(why) => panic!("Couldn't open {}: {}", display, why),
-        Ok(file) => file,
-    };
-
-    let mut buffer = Vec::new();
-    match file.read_to_end(&mut buffer) {
-        Err(why) => panic!("Couldn't read {}: {}", display, why),
-        Ok(size) => print!("{} contains: {} bytes\n", display, size),
+        Ok(header)
     }
 
-    // // Read the file contents into a string, returns `io::Result<usize>`
-    // let mut s = String::new();
-    // match file.read_to_string(&mut s) {
-    //     Err(why) => panic!("couldn't read {}: {}", display, why),
-    //     Ok(_) => print!("{} contains:\n{}", display, s),
-    // }
+    fn checksum(header: &[u8]) -> Result<()> {
+        let mut crc: u16 = 0;
+        for byte in &header[..12] {
+            crc = Self::fit_crc_get16(crc, *byte);
+        }
 
-    // `file` goes out of scope, and the "hello.txt" file gets closed
-    buffer
+        let expected_crc = u16::from_le_bytes(header[12..14].try_into()?);
+        if crc != expected_crc {
+            return Err(Error::InvalidCrc {
+                received: crc,
+                expected: expected_crc,
+            }
+            .into());
+        }
+
+        Ok(())
+    }
+
+    fn fit_crc_get16(mut crc: u16, byte: u8) -> u16 {
+        const CRC_TABLE: [u16; 16] = [
+            0x0000, 0xCC01, 0xD801, 0x1400, 0xF001, 0x3C00, 0x2800, 0xE401, 0xA001, 0x6C00, 0x7800,
+            0xB401, 0x5000, 0x9C01, 0x8801, 0x4400,
+        ];
+
+        // compute checksum of lower four bits of byte
+        let mut tmp = CRC_TABLE[(crc & 0xF) as usize];
+        crc = (crc >> 4) & 0x0FFF;
+        crc = crc ^ tmp ^ CRC_TABLE[(byte & 0xF) as usize];
+
+        // now compute checksum of upper four bits of byte
+        tmp = CRC_TABLE[(crc & 0xF) as usize];
+        crc = (crc >> 4) & 0x0FFF;
+        crc = crc ^ tmp ^ CRC_TABLE[((byte >> 4) & 0xF) as usize];
+
+        crc
+    }
 }
 
-fn get_header(byte: &[u8]) -> &[u8] {
-    let header_size = byte[0];
-    println!("Header length: {}", header_size);
+// data_records: Vec<FitRecordHeader, RecordContent>,
 
-    &byte[..header_size as usize]
+#[derive(Debug, Default)]
+struct FitDataRecord {
+    record_header_type: RecordHeaderType,
+    record_content_type: RecordContentType,
 }
 
-fn get_data_reords(byte: &[u8]) -> &[u8] {
-    let header_size = byte[0]; // & ?
+impl FitDataRecord {
+    pub fn new(header_type: u8, data_type: u8) -> Result<Self> {
+        let record_header_type = match header_type {
+            0 => RecordHeaderType::Normal(NormalHeader::default()),
+            1 => RecordHeaderType::CompressedTimestamp(CompressedTimestampHeader::default()),
+            other => {
+                return Err(Error::InvalidValue {
+                    received: other,
+                    expected: 0,
+                }
+                .into());
+            }
+        };
 
-    let data_reords_size = u32::from_le_bytes(byte[4..8].try_into().unwrap());
-    println!("Data Record Size: {}", data_reords_size);
+        let record_content_type = match data_type {
+            0 => RecordContentType::Definition(DefinitionMessage::default()),
+            1 => RecordContentType::Data(DataMessage::default()),
+            other => {
+                return Err(Error::InvalidValue {
+                    received: other,
+                    expected: 0,
+                }
+                .into());
+            }
+        };
 
-    &byte[header_size as usize..data_reords_size as usize]
+        Ok(Self {
+            record_header_type: record_header_type,
+            record_content_type: record_content_type,
+        })
+    }
+
+    fn parse(&self, content: &[u8]) -> Result<()> {
+        match &self.record_header_type {
+            RecordHeaderType::Normal(normal) => normal.parse(content),
+            RecordHeaderType::CompressedTimestamp(compressed_timestamp) => {
+                compressed_timestamp.parse(content)
+            }
+        };
+
+        match &self.record_content_type {
+            RecordContentType::Definition(definition) => definition.parse(content),
+            RecordContentType::Data(data) => data.parse(content),
+        };
+
+        Ok(())
+    }
 }
 
-fn main() {
+#[derive(Debug, Default)]
+struct NormalHeader {}
+impl NormalHeader {
+    pub fn parse(&self, content: &[u8]) {}
+}
+
+#[derive(Debug, Default)]
+struct CompressedTimestampHeader {}
+impl CompressedTimestampHeader {
+    pub fn parse(&self, content: &[u8]) {}
+}
+
+#[derive(Debug)]
+enum RecordHeaderType {
+    Normal(NormalHeader),
+    CompressedTimestamp(CompressedTimestampHeader),
+}
+
+impl Default for RecordHeaderType {
+    fn default() -> Self {
+        Self::Normal(NormalHeader::default())
+    }
+}
+
+#[derive(Debug, Default)]
+struct DefinitionMessage {}
+impl DefinitionMessage {
+    pub fn parse(&self, content: &[u8]) {}
+}
+#[derive(Debug, Default)]
+struct DataMessage {}
+impl DataMessage {
+    pub fn parse(&self, content: &[u8]) {}
+}
+
+#[derive(Debug)]
+enum RecordContentType {
+    Definition(DefinitionMessage),
+    Data(DataMessage),
+}
+
+impl Default for RecordContentType {
+    fn default() -> Self {
+        Self::Definition(DefinitionMessage::default())
+    }
+}
+
+#[derive(Debug, Default)]
+struct FitDataRecords {
+    records: Vec<FitDataRecord>,
+}
+
+impl FitDataRecords {
+    pub fn parse(&mut self, content: &[u8]) -> Result<()> {
+        let data_records = &content[14..]; // ToDo: Use variable instead of magic number
+
+        // while(!end) {
+
+        let record_header = data_records.first().unwrap();
+
+        let header_type = (record_header >> 7) & 1;
+        let data_type = (record_header >> 6) & 1;
+
+        // ToDo: match sur header_type et data_type pour convertir en enum ?
+
+        let fit_data_record = FitDataRecord::new(header_type, data_type)?;
+        fit_data_record.parse(data_records)?;
+
+        self.records.push(fit_data_record);
+
+        // }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Default)]
+struct FitParser {
+    header: FitHeader,
+    data_records: FitDataRecords,
+}
+
+impl FitParser {
+    pub fn parse(&mut self, swimming_path: &Path) -> Result<()> {
+        let content = fs::read(swimming_path)?;
+
+        self.header.parse(&content)?;
+        self.data_records.parse(&content)?;
+
+        Ok(())
+    }
+}
+
+fn main() -> Result<()> {
+    // Todo: Pass argument path by CLI
     let swimming_path = Path::new("resources/swimming.fit");
 
-    let content = fs::read(swimming_path).expect("Failure");
+    let mut fit_parser = FitParser::default();
 
-    let header = get_header(&content);
-    println!("Protocol Version: {}", header[1]);
+    fit_parser.parse(swimming_path)?;
 
-    let profile_version = u16::from_le_bytes(header[2..4].try_into().unwrap());
-    println!("Profile Version: {}", profile_version);
+    println!("{fit_parser:#?}");
 
-    match str::from_utf8(&header[8..12]) {
-        // ASCII ?
-        Ok(a) => println!("{}", a),
-        Err(e) => eprintln!("{}", e),
-    }
-    // let res = String::from_utf8_lossy(&header[7..12]);
-    // println!("{}", res);
-
-    let data_reords = get_data_reords(&content);
-
-    let record_header = &data_reords[0];
-
-    for i in 0..8 {
-        let bit = (record_header >> i) & 1; // on décale i positions puis on masque
-        println!("Bit {} = {}", i, bit);
-    }
+    Ok(())
 }
