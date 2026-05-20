@@ -34,8 +34,7 @@ impl FitHeader {
         if header_size < 14 {
             return Err(Error::InvaliHeaderSize {
                 received: header_size,
-            }
-            .into());
+            });
         }
 
         let header = content
@@ -47,8 +46,7 @@ impl FitHeader {
         if &header[8..12] != b".FIT" {
             return Err(Error::MagicNumber {
                 received: str::from_utf8(&header[8..12])?.to_string(),
-            }
-            .into());
+            });
         }
 
         Ok(header)
@@ -65,8 +63,7 @@ impl FitHeader {
             return Err(Error::InvalidCrc {
                 received: crc,
                 expected: expected_crc,
-            }
-            .into());
+            });
         }
 
         Ok(())
@@ -109,8 +106,7 @@ impl FitDataRecord {
                 return Err(Error::InvalidValue {
                     received: other,
                     expected: 0,
-                }
-                .into());
+                });
             }
         };
 
@@ -121,14 +117,13 @@ impl FitDataRecord {
                 return Err(Error::InvalidValue {
                     received: other,
                     expected: 0,
-                }
-                .into());
+                });
             }
         };
 
         Ok(Self {
-            record_header_type: record_header_type,
-            record_content_type: record_content_type,
+            record_header_type,
+            record_content_type,
         })
     }
 
