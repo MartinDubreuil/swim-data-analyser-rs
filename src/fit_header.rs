@@ -1,0 +1,86 @@
+use std::io;
+
+use crate::error::{Error, Result};
+
+#[derive(Debug, Default)]
+pub struct FitHeader {
+    protocol_version: u8,
+    profile_version: u16,
+    data_records_size: u32,
+    data_type: String,
+}
+
+impl FitHeader {
+    pub fn parse(&mut self, content: &[u8]) -> Result<()> {
+        let header = Self::validate(content)?;
+
+        self.protocol_version = header[1];
+        self.profile_version = u16::from_le_bytes(header[2..4].try_into()?);
+        self.data_records_size = u32::from_le_bytes(header[4..8].try_into()?);
+        self.data_type = str::from_utf8(&header[8..12])?.to_owned();
+
+        Ok(())
+    }
+
+    fn validate(content: &[u8]) -> Result<&[u8]> {
+        let header_size = *content
+            .first()
+            .ok_or(io::Error::from(io::ErrorKind::UnexpectedEof))?;
+
+        if header_size < 14 {
+            return Err(Error::InvaliHeaderSize {
+                received: header_size,
+            });
+        }
+
+        let header = content
+            .get(..header_size as usize)
+            .ok_or(io::Error::from(io::ErrorKind::UnexpectedEof))?;
+
+        Self::checksum(header)?;
+
+        if &header[8..12] != b".FIT" {
+            return Err(Error::MagicNumber {
+                received: str::from_utf8(&header[8..12])?.to_string(),
+            });
+        }
+
+        Ok(header)
+    }
+
+    fn checksum(header: &[u8]) -> Result<()> {
+        let mut crc: u16 = 0;
+        for byte in &header[..12] {
+            crc = Self::fit_crc_get16(crc, *byte);
+        }
+
+        let expected_crc = u16::from_le_bytes(header[12..14].try_into()?);
+        if crc != expected_crc {
+            return Err(Error::InvalidCrc {
+                received: crc,
+                expected: expected_crc,
+            });
+        }
+
+        Ok(())
+    }
+
+    fn fit_crc_get16(mut crc: u16, byte: u8) -> u16 {
+        const CRC_TABLE: [u16; 16] = [
+            0x0000, 0xCC01, 0xD801, 0x1400, 0xF001, 0x3C00, 0x2800, 0xE401, 0xA001, 0x6C00, 0x7800,
+            0xB401, 0x5000, 0x9C01, 0x8801, 0x4400,
+        ];
+
+        // compute checksum of lower four bits of byte
+        let mut tmp = CRC_TABLE[(crc & 0xF) as usize];
+        crc = (crc >> 4) & 0x0FFF;
+        crc = crc ^ tmp ^ CRC_TABLE[(byte & 0xF) as usize];
+
+        // now compute checksum of upper four bits of byte
+        tmp = CRC_TABLE[(crc & 0xF) as usize];
+        crc = (crc >> 4) & 0x0FFF;
+        crc = crc ^ tmp ^ CRC_TABLE[((byte >> 4) & 0xF) as usize];
+
+        crc
+    }
+}
