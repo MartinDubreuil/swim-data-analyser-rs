@@ -1,5 +1,6 @@
 mod error;
 mod fit_data_records;
+mod fit_data_records_dyn;
 mod fit_header;
 mod fit_parser;
 
