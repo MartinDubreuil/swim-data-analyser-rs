@@ -27,11 +27,11 @@ impl FitDataRecords {
     }
 }
 
-trait RecordType: std::fmt::Debug + Default {
+trait RecordType: std::fmt::Debug {
     fn parse(&mut self, content: &[u8]) -> Result<()>;
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct FitDataRecord {
     record_header_type: Box<dyn RecordType>,  // RecordHeaderType
     record_content_type: Box<dyn RecordType>, // RecordContentType
@@ -39,9 +39,9 @@ struct FitDataRecord {
 
 impl FitDataRecord {
     pub fn new(header_type: u8, data_type: u8) -> Result<Self> {
-        let record_header_type = match header_type {
-            0 => NormalHeader::default().into(),
-            1 => CompressedTimestampHeader::default().into(),
+        let record_header_type: Box<dyn RecordType> = match header_type {
+            0 => Box::new(NormalHeader::default()),
+            1 => Box::new(CompressedTimestampHeader::default()),
             other => {
                 return Err(Error::InvalidValue {
                     received: other,
@@ -50,9 +50,9 @@ impl FitDataRecord {
             }
         };
 
-        let record_content_type = match data_type {
-            0 => DefinitionMessage::default().into(),
-            1 => DataMessage::default().into(),
+        let record_content_type: Box<dyn RecordType> = match data_type {
+            0 => Box::new(DefinitionMessage::default()),
+            1 => Box::new(DataMessage::default()),
             other => {
                 return Err(Error::InvalidValue {
                     received: other,

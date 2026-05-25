@@ -1,6 +1,6 @@
 use std::{fs, path::Path};
 
-use crate::{error::Result, fit_data_records::FitDataRecords, fit_header::FitHeader};
+use crate::{error::Result, fit_data_records_dyn::FitDataRecords, fit_header::FitHeader};
 
 #[derive(Debug, Default)]
 pub struct FitParser {
