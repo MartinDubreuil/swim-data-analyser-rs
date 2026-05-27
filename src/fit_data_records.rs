@@ -95,7 +95,7 @@ impl Default for RecordHeaderType {
 #[derive(Debug, Default)]
 struct NormalHeader {}
 impl NormalHeader {
-    pub fn parse(&mut self, content: &[u8]) -> Result<()> {
+    pub fn parse(&mut self, _content: &[u8]) -> Result<()> {
         println!("NormalHeader::parse()"); // Todo: To implement
         Ok(())
     }
@@ -104,7 +104,7 @@ impl NormalHeader {
 #[derive(Debug, Default)]
 struct CompressedTimestampHeader {}
 impl CompressedTimestampHeader {
-    pub fn parse(&mut self, content: &[u8]) -> Result<()> {
+    pub fn parse(&mut self, _content: &[u8]) -> Result<()> {
         println!("CompressedTimestampHeader::parse()"); // Todo: To implement
         Ok(())
     }
@@ -125,7 +125,7 @@ impl Default for RecordContentType {
 #[derive(Debug, Default)]
 struct DefinitionMessage {}
 impl DefinitionMessage {
-    pub fn parse(&mut self, content: &[u8]) -> Result<()> {
+    pub fn parse(&mut self, _content: &[u8]) -> Result<()> {
         println!("DefinitionMessage::parse()"); // Todo: To implement
         Ok(())
     }
@@ -133,7 +133,7 @@ impl DefinitionMessage {
 #[derive(Debug, Default)]
 struct DataMessage {}
 impl DataMessage {
-    pub fn parse(&mut self, content: &[u8]) -> Result<()> {
+    pub fn parse(&mut self, _content: &[u8]) -> Result<()> {
         println!("DataMessage::parse()"); // Todo: To implement
         Ok(())
     }
