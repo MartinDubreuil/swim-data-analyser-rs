@@ -94,3 +94,33 @@ impl FitHeader {
         crc
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const HEADER: [u8; 14] = [14, 16, 222, 7, 99, 183, 0, 0, 46, 70, 73, 84, 161, 223];
+
+    #[test]
+    fn test_fit_crc_get16() {
+        assert_eq!(FitHeader::fit_crc_get16(0, 14), 50305);
+    }
+
+    #[test]
+    fn test_checksum() {
+        assert!(FitHeader::checksum(&HEADER).is_ok());
+    }
+
+    #[test]
+    fn test_validate() -> Result<()> {
+        assert_eq!(FitHeader::validate(&HEADER)?, HEADER);
+        Ok(())
+    }
+
+    // #[test]
+    // fn test_parse() -> Result<()> {
+    //     let fit_header = FitHeader::default();
+    //     fit_header.parse(&HEADER)?;
+    //     Ok(())
+    // }
+}
