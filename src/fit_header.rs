@@ -11,8 +11,12 @@ pub struct FitHeader {
 }
 
 impl FitHeader {
-    pub fn parse(&mut self, content: &[u8]) -> Result<()> {
-        let header = Self::validate(content)?;
+    pub fn parse(&mut self, header: &[u8]) -> Result<()> {
+        if header.len() < 14 {
+            return Err(Error::InvaliHeaderSize {
+                received: header.len() as u8,
+            });
+        }
 
         self.protocol_version = header[1];
         self.profile_version = u16::from_le_bytes(header[2..4].try_into()?);
@@ -22,7 +26,7 @@ impl FitHeader {
         Ok(())
     }
 
-    fn validate(content: &[u8]) -> Result<&[u8]> {
+    pub fn validate(content: &[u8]) -> Result<&[u8]> {
         let header_size = *content
             .first()
             .ok_or(io::Error::from(io::ErrorKind::UnexpectedEof))?;
@@ -49,6 +53,12 @@ impl FitHeader {
     }
 
     fn checksum(header: &[u8]) -> Result<()> {
+        if header.len() < 14 {
+            return Err(Error::InvaliHeaderSize {
+                received: header.len() as u8,
+            });
+        }
+
         let mut crc: u16 = 0;
         for byte in &header[..12] {
             crc = Self::fit_crc_get16(crc, *byte);

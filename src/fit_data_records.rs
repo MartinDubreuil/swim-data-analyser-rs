@@ -6,12 +6,16 @@ pub struct FitDataRecords {
 }
 
 impl FitDataRecords {
-    pub fn parse(&mut self, content: &[u8]) -> Result<()> {
-        let data_records = &content[14..]; // ToDo: Use variable instead of magic number
+    pub fn validate(data_records: &[u8]) -> Result<&[u8]> {
+        Ok(data_records)
+    }
 
+    pub fn parse(&mut self, data_records: &[u8]) -> Result<()> {
         // while(!end) {
 
-        let record_header = data_records.first().unwrap();
+        let record_header = data_records
+            .first()
+            .ok_or(std::io::Error::from(std::io::ErrorKind::UnexpectedEof))?;
 
         let header_type = (record_header >> 7) & 1;
         let data_type = (record_header >> 6) & 1;
