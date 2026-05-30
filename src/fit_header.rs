@@ -13,7 +13,7 @@ pub struct FitHeader {
 impl FitHeader {
     pub fn parse(&mut self, header: &[u8]) -> Result<()> {
         if header.len() < 14 {
-            return Err(Error::InvaliHeaderSize {
+            return Err(Error::InvalidHeaderSize {
                 received: header.len() as u8,
             });
         }
@@ -32,7 +32,7 @@ impl FitHeader {
             .ok_or(io::Error::from(io::ErrorKind::UnexpectedEof))?;
 
         if header_size < 14 {
-            return Err(Error::InvaliHeaderSize {
+            return Err(Error::InvalidHeaderSize {
                 received: header_size,
             });
         }
@@ -54,7 +54,7 @@ impl FitHeader {
 
     fn checksum(header: &[u8]) -> Result<()> {
         if header.len() < 14 {
-            return Err(Error::InvaliHeaderSize {
+            return Err(Error::InvalidHeaderSize {
                 received: header.len() as u8,
             });
         }

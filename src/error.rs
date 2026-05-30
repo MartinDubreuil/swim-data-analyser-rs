@@ -12,7 +12,7 @@ pub enum Error {
     InvalidCrc { received: u16, expected: u16 },
 
     #[error("Invalid header size, received '{received}', expected '14'")]
-    InvaliHeaderSize { received: u8 },
+    InvalidHeaderSize { received: u8 },
 
     #[error("Invalid value, received '{received}', expected '{expected}'")]
     InvalidValue { received: u8, expected: u8 },
