@@ -8,7 +8,8 @@
         "vscode": {
             "extensions": [
                 "eamodio.gitlens",
-                "github.copilot"
+                "github.copilot",
+                "Gruntfuggly.todo-tree"
             ],
             "settings": {
                 "editor.formatOnSave": true,

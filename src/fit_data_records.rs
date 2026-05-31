@@ -1,5 +1,7 @@
 use crate::error::{Error, Result};
 
+use enum_dispatch::enum_dispatch; // Todo: Use enum_dispatch
+
 #[derive(Debug, Default)]
 pub struct FitDataRecords {
     records: Vec<FitDataRecord>,
@@ -7,28 +9,20 @@ pub struct FitDataRecords {
 
 impl FitDataRecords {
     pub fn validate(content: &[u8]) -> Result<&[u8]> {
-        Ok(&content
+        Ok(content
             .get(..content.len() - 2)
             .ok_or(std::io::Error::from(std::io::ErrorKind::UnexpectedEof))?)
     }
 
     pub fn parse(&mut self, mut data_records: &[u8]) -> Result<()> {
         while !data_records.is_empty() {
-            // let record_header = data_records
-            //     .first()
-            //     .ok_or(std::io::Error::from(std::io::ErrorKind::UnexpectedEof))?;
-
-            // let header_type = (record_header >> 7) & 1;
-            // let data_type = (record_header >> 6) & 1;
-
-            // let mut fit_data_record = FitDataRecord::new(header_type, data_type)?;
-
-            let data_record = FitDataRecord::validate(data_records)?;
-            fit_data_recor.parse(data_records)?;
+            let mut fit_data_record = FitDataRecord::new(data_records)?;
+            let data_record = fit_data_record.validate(data_records)?;
+            fit_data_record.parse(data_record)?;
             self.records.push(fit_data_record);
 
             data_records = data_records
-                .get(data_record.len()..)
+                .get(data_record.0.len() + data_record.1.len()..)
                 .ok_or(std::io::Error::from(std::io::ErrorKind::UnexpectedEof))?;
         }
 
@@ -43,36 +37,7 @@ struct FitDataRecord {
 }
 
 impl FitDataRecord {
-    pub fn new(header_type: u8, data_type: u8) -> Result<Self> {
-        let record_header_type = match header_type {
-            0 => RecordHeaderType::Normal(NormalHeader::default()),
-            1 => RecordHeaderType::CompressedTimestamp(CompressedTimestampHeader::default()),
-            other => {
-                return Err(Error::InvalidValue {
-                    received: other,
-                    expected: 0,
-                });
-            }
-        };
-
-        let record_content_type = match data_type {
-            0 => RecordContentType::Data(DataMessage::default()),
-            1 => RecordContentType::Definition(DefinitionMessage::default()),
-            other => {
-                return Err(Error::InvalidValue {
-                    received: other,
-                    expected: 0,
-                });
-            }
-        };
-
-        Ok(Self {
-            record_header_type,
-            record_content_type,
-        })
-    }
-
-    pub fn validate(data_records: &[u8]) -> Result<&[u8]> {
+    pub fn new(data_records: &[u8]) -> Result<Self> {
         let record_header_val = data_records
             .first()
             .ok_or(std::io::Error::from(std::io::ErrorKind::UnexpectedEof))?;
@@ -90,25 +55,11 @@ impl FitDataRecord {
             }
         };
 
-        let record_header = match record_header_type {
-            RecordHeaderTypeValue::Normal => NormalHeader::validate(data_records)?,
-            RecordHeaderTypeValue::CompressedTimestamp => {
-                CompressedTimestampHeader::validate(data_records)?
-            }
-        };
+        let content_type = (record_header_val >> 6) & 1;
 
-        let data_type = (record_header_val >> 6) & 1;
-
-        if record_header_type == RecordHeaderTypeValue::CompressedTimestamp && data_type == 0 {
-            return Err(Error::InvalidValue {
-                received: 1,
-                expected: 0,
-            });
-        }
-
-        let record_content = match data_type {
-            0 => DataMessage::validate(data_records),
-            1 => DefinitionMessage::validate(data_records),
+        let message_type = match content_type {
+            0 => RecordContentTypeValue::Data,
+            1 => RecordContentTypeValue::Definition,
             other => {
                 return Err(Error::InvalidValue {
                     received: other,
@@ -117,27 +68,46 @@ impl FitDataRecord {
             }
         };
 
-        Ok(&data_records
-            .get(..record_header.len() + record_content.len())
-            .ok_or(std::io::Error::from(std::io::ErrorKind::UnexpectedEof))?)
+        Ok(Self::dispatch(record_header_type, message_type))
     }
 
-    fn parse(&mut self, data_record: &[u8]) -> Result<()> {
-        match &mut self.record_header_type {
-            RecordHeaderType::Normal(normal) => {
-                let normal_header = NormalHeader::validate(data_record)?;
-                normal.parse(normal_header)?
-            }
-            RecordHeaderType::CompressedTimestamp(compressed_timestamp) => {
-                let compressed_timestamp_header = CompressedTimestampHeader::validate(data_record)?;
-                compressed_timestamp.parse(compressed_timestamp_header)?
+    fn dispatch(header_type: RecordHeaderTypeValue, content_type: RecordContentTypeValue) -> Self {
+        let record_header_type = match header_type {
+            RecordHeaderTypeValue::Normal => RecordHeaderType::Normal(NormalHeader::default()),
+            RecordHeaderTypeValue::CompressedTimestamp => {
+                RecordHeaderType::CompressedTimestamp(CompressedTimestampHeader::default())
             }
         };
 
-        match &mut self.record_content_type {
-            RecordContentType::Definition(definition) => definition.parse(data_record)?,
-            RecordContentType::Data(data) => data.parse(data_record)?,
+        let record_content_type = match content_type {
+            RecordContentTypeValue::Data => RecordContentType::Data(DataMessage::default()),
+            RecordContentTypeValue::Definition => {
+                RecordContentType::Definition(DefinitionMessage::default())
+            }
         };
+
+        Self {
+            record_header_type,
+            record_content_type,
+        }
+    }
+
+    fn validate<'a>(&self, data_records: &'a [u8]) -> Result<(&'a [u8], &'a [u8])> {
+        let header_type = self.record_header_type.validate(data_records)?;
+        let record_content = self.record_content_type.validate(data_records)?;
+
+        Ok((header_type, record_content))
+        // Ok(data_records
+        //     .get(..header_type.len() + record_content.len())
+        //     .ok_or(std::io::Error::from(std::io::ErrorKind::UnexpectedEof))?)
+    }
+
+    pub fn parse(&mut self, data_record: (&[u8], &[u8])) -> Result<()> {
+        let record_header = data_record.0;
+        self.record_header_type.parse(record_header)?;
+
+        let record_content = data_record.1;
+        self.record_content_type.parse(record_content)?;
 
         Ok(())
     }
@@ -154,6 +124,26 @@ enum RecordHeaderType {
     CompressedTimestamp(CompressedTimestampHeader),
 }
 
+impl RecordHeaderType {
+    fn validate<'a>(&self, data_records: &'a [u8]) -> Result<&'a [u8]> {
+        match self {
+            RecordHeaderType::Normal(_) => NormalHeader::validate(data_records),
+            RecordHeaderType::CompressedTimestamp(_) => {
+                CompressedTimestampHeader::validate(data_records)
+            }
+        }
+    }
+
+    fn parse(&mut self, record_header: &[u8]) -> Result<()> {
+        match self {
+            RecordHeaderType::Normal(normal_header) => normal_header.parse(record_header),
+            RecordHeaderType::CompressedTimestamp(compressed_timestamp) => {
+                compressed_timestamp.parse(record_header)
+            }
+        }
+    }
+}
+
 impl Default for RecordHeaderType {
     fn default() -> Self {
         Self::Normal(NormalHeader::default())
@@ -166,17 +156,17 @@ struct NormalHeader {
 }
 
 impl NormalHeader {
-    pub fn validate(content: &[u8]) -> Result<&[u8]> {
-        Ok(content
+    pub fn validate(data_records: &[u8]) -> Result<&[u8]> {
+        Ok(data_records
             .get(..1)
             .ok_or(std::io::Error::from(std::io::ErrorKind::UnexpectedEof))?)
     }
 
-    pub fn parse(&mut self, header: &[u8]) -> Result<()> {
-        println!("NormalHeader::parse()"); // Todo: To implement
+    pub fn parse(&mut self, record_header: &[u8]) -> Result<()> {
+        // println!("NormalHeader::parse()"); // Todo: To implement
 
-        self.local_message_type = header
-            .get(0)
+        self.local_message_type = record_header
+            .first()
             .ok_or(std::io::Error::from(std::io::ErrorKind::UnexpectedEof))?
             & 0b1111;
 
@@ -188,22 +178,46 @@ impl NormalHeader {
 struct CompressedTimestampHeader {}
 
 impl CompressedTimestampHeader {
-    pub fn validate(content: &[u8]) -> Result<&[u8]> {
-        Ok(&content
+    pub fn validate(data_records: &[u8]) -> Result<&[u8]> {
+        Ok(data_records
             .get(..1)
             .ok_or(std::io::Error::from(std::io::ErrorKind::UnexpectedEof))?)
     }
 
-    pub fn parse(&mut self, _content: &[u8]) -> Result<()> {
-        println!("CompressedTimestampHeader::parse()"); // Todo: To implement
+    pub fn parse(&mut self, _record_header: &[u8]) -> Result<()> {
+        // println!("CompressedTimestampHeader::parse()"); // Todo: To implement
         Ok(())
     }
 }
 
+enum RecordContentTypeValue {
+    Data,
+    Definition,
+}
+
 #[derive(Debug)]
+#[enum_dispatch(validate)]
 enum RecordContentType {
     Definition(DefinitionMessage),
     Data(DataMessage),
+}
+
+impl RecordContentType {
+    fn validate<'a>(&self, data_records: &'a [u8]) -> Result<&'a [u8]> {
+        match self {
+            RecordContentType::Definition(_) => DefinitionMessage::validate(data_records),
+            RecordContentType::Data(_) => DataMessage::validate(data_records),
+        }
+    }
+
+    fn parse(&mut self, data_record: &[u8]) -> Result<()> {
+        match self {
+            RecordContentType::Definition(definition_message) => {
+                definition_message.parse(data_record)
+            }
+            RecordContentType::Data(data_message) => data_message.parse(data_record),
+        }
+    }
 }
 
 impl Default for RecordContentType {
@@ -215,16 +229,28 @@ impl Default for RecordContentType {
 #[derive(Debug, Default)]
 struct DefinitionMessage {}
 impl DefinitionMessage {
-    pub fn parse(&mut self, _content: &[u8]) -> Result<()> {
-        println!("DefinitionMessage::parse()"); // Todo: To implement
+    pub fn validate(data_records: &[u8]) -> Result<&[u8]> {
+        Ok(data_records
+            .get(..100)
+            .ok_or(std::io::Error::from(std::io::ErrorKind::UnexpectedEof))?)
+    }
+
+    pub fn parse(&mut self, _data_record: &[u8]) -> Result<()> {
+        // println!("DefinitionMessage::parse()"); // Todo: To implement
         Ok(())
     }
 }
 #[derive(Debug, Default)]
 struct DataMessage {}
 impl DataMessage {
-    pub fn parse(&mut self, _content: &[u8]) -> Result<()> {
-        println!("DataMessage::parse()"); // Todo: To implement
+    pub fn validate(data_records: &[u8]) -> Result<&[u8]> {
+        Ok(data_records
+            .get(..100)
+            .ok_or(std::io::Error::from(std::io::ErrorKind::UnexpectedEof))?)
+    }
+
+    pub fn parse(&mut self, _data_record: &[u8]) -> Result<()> {
+        // println!("DataMessage::parse()"); // Todo: To implement
         Ok(())
     }
 }
