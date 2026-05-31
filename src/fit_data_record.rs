@@ -6,7 +6,7 @@ use crate::{
     },
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct FitDataRecord {
     record_header_type: RecordHeaderType,
     record_content_type: RecordContentType,

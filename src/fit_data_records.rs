@@ -13,7 +13,9 @@ impl FitDataRecords {
     }
 
     pub fn parse(&mut self, mut data_records: &[u8]) -> Result<()> {
-        while !data_records.is_empty() {
+        // while !data_records.is_empty() {
+        // Todo: Fix this
+        while data_records.len() > 110 {
             let mut fit_data_record = FitDataRecord::new(data_records)?;
             let data_record = fit_data_record.validate(data_records)?;
             fit_data_record.parse(data_record)?;

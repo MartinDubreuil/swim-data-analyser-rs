@@ -1,6 +1,6 @@
-use crate::error::Result;
-
 use enum_dispatch::enum_dispatch; // Todo: Use enum_dispatch
+
+use crate::error::Result;
 
 pub enum RecordContentTypeValue {
     Data,
@@ -29,12 +29,6 @@ impl RecordContentType {
             }
             RecordContentType::Data(data_message) => data_message.parse(data_record),
         }
-    }
-}
-
-impl Default for RecordContentType {
-    fn default() -> Self {
-        Self::Definition(DefinitionMessage::default())
     }
 }
 

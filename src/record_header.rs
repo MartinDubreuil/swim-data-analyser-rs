@@ -30,13 +30,6 @@ impl RecordHeaderType {
         }
     }
 }
-
-impl Default for RecordHeaderType {
-    fn default() -> Self {
-        Self::Normal(NormalHeader::default())
-    }
-}
-
 #[derive(Debug, Default)]
 pub struct NormalHeader {
     local_message_type: u8,

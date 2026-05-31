@@ -17,7 +17,7 @@ fn main() -> Result<()> {
     let mut fit_parser = FitParser::default();
     fit_parser.parse(swimming_path)?;
 
-    println!("{fit_parser:#?}");
+    // println!("{fit_parser:#?}");
 
     Ok(())
 }
