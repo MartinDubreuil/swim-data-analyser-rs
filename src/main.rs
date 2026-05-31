@@ -1,7 +1,10 @@
 mod error;
+mod fit_data_record;
 mod fit_data_records;
 mod fit_header;
 mod fit_parser;
+mod record_content;
+mod record_header;
 
 use std::path::Path;
 
