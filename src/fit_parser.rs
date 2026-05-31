@@ -23,6 +23,7 @@ impl FitParser {
                 .ok_or(std::io::Error::from(std::io::ErrorKind::UnexpectedEof))?,
         )?;
         self.data_records.parse(data_records)?;
+        cursor += data_records.len();
 
         Ok(())
     }

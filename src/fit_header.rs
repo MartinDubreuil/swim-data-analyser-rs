@@ -52,6 +52,7 @@ impl FitHeader {
         Ok(header)
     }
 
+    /// Compute checksum according to
     fn checksum(header: &[u8]) -> Result<()> {
         if header.len() < 14 {
             return Err(Error::InvalidHeaderSize {
