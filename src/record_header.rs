@@ -43,8 +43,6 @@ impl NormalHeader {
     }
 
     pub fn parse(&mut self, record_header: &[u8]) -> Result<()> {
-        // println!("NormalHeader::parse()"); // Todo: To implement
-
         self.local_message_type = record_header
             .first()
             .ok_or(std::io::Error::from(std::io::ErrorKind::UnexpectedEof))?

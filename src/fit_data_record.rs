@@ -14,11 +14,11 @@ pub struct FitDataRecord {
 
 impl FitDataRecord {
     pub fn new(data_records: &[u8]) -> Result<Self> {
-        let record_header_val = data_records
+        let record_header_byte = data_records
             .first()
             .ok_or(std::io::Error::from(std::io::ErrorKind::UnexpectedEof))?;
 
-        let header_type = (record_header_val >> 7) & 1;
+        let header_type = (record_header_byte >> 7) & 1;
 
         let record_header_type = match header_type {
             0 => RecordHeaderTypeValue::Normal,
@@ -31,9 +31,9 @@ impl FitDataRecord {
             }
         };
 
-        let content_type = (record_header_val >> 6) & 1;
+        let content_type = (record_header_byte >> 6) & 1;
 
-        let message_type = match content_type {
+        let record_content_type = match content_type {
             0 => RecordContentTypeValue::Data,
             1 => RecordContentTypeValue::Definition,
             other => {
@@ -44,7 +44,7 @@ impl FitDataRecord {
             }
         };
 
-        Ok(Self::dispatch(record_header_type, message_type))
+        Ok(Self::dispatch(record_header_type, record_content_type))
     }
 
     fn dispatch(header_type: RecordHeaderTypeValue, content_type: RecordContentTypeValue) -> Self {
